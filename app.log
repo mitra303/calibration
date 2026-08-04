@@ -1,0 +1,12 @@
+nohup: ignoring input
+
+> excel-barcode-app@0.1.0 start
+> next start -p 8009
+
+▲ Next.js 16.1.6
+- Local:         http://localhost:8009
+- Network:       http://192.9.201.35:8009
+
+✓ Starting...
+✓ Ready in 209ms
+Killed

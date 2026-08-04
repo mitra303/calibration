@@ -1,0 +1,286 @@
+"use client";
+
+import { useState } from "react";
+import * as XLSX from "xlsx";
+import QRCode from "qrcode";
+import Link from "next/link";
+import type { CSSProperties } from "react";
+
+import { v4 as uuidv4 } from "uuid";
+
+/* ✅ Define row type */
+interface InstrumentRow {
+  id: string;
+  SrNo: string;
+  InstrumentName: string;
+  InstRefNo: string;
+  Make: string;
+  Location: string;
+  InstRange: string;
+  LeastCount: string;
+  RangeOfUse: string;
+  CalibRange: string;
+  Frequency: string;
+  PerformedBy: string;
+  CalibDueOn: string | number;
+  qrCode: string;
+}
+
+export default function Home() {
+  /* ✅ FIX: typed state */
+  const [rows, setRows] = useState<InstrumentRow[]>([]);
+
+  const formatDate = (
+    value: string | number | null | undefined
+  ): string => {
+    if (!value) return "";
+    if (typeof value === "number" && !isNaN(value)) {
+      const date = new Date((value - 25569) * 86400 * 1000);
+      return date.toLocaleDateString("en-GB");
+    }
+    return String(value);
+  };
+
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+    const jsonData = XLSX.utils.sheet_to_json(sheet, {
+      range: 3,
+      defval: "",
+      header: [
+        "SrNo",
+        "InstrumentName",
+        "InstRefNo",
+        "Make",
+        "Location",
+        "InstRange",
+        "LeastCount",
+        "RangeOfUse",
+        "CalibRange",
+        "Frequency",
+        "PerformedBy",
+        "CalibDueOn",
+      ],
+    });
+
+    const cleanData = jsonData.filter(
+      (r: any) => r.InstrumentName && r.InstRefNo
+    );
+
+
+    const rowsWithQR: InstrumentRow[] = [];
+    for (const row of cleanData as any[]) {
+      const id = uuidv4(); // 🔒 SAME ID
+      //const url = `https://hezekiah-architraved-superfantastically.ngrok-free.dev/details/${id}`;
+      const url = `http://115.241.45.146:8009//details/${id}`;
+      console.log(url);
+      const qrCode = await QRCode.toDataURL(url);
+
+      // 🔁 PUSH SAME ROW 4 TIMES
+      for (let i = 0; i < 1; i++) {
+        rowsWithQR.push({
+          id,
+          ...row,
+          qrCode,
+        });
+      }
+    }
+
+
+
+    localStorage.setItem("excelData", JSON.stringify(rowsWithQR));
+
+    await fetch("/api/store", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rowsWithQR),
+    });
+
+    setRows(rowsWithQR);
+  };
+
+  return (
+    <div style={styles.layout}>
+      <aside style={styles.sidebar}>
+        {/* <h2 style={styles.logo}>Calibration</h2> */}
+        <h2 style={styles.logo}>Calibration</h2>
+        <Link href="/dashboard" style={styles.menuItemActive}>Upload</Link>
+        <Link href="/view" style={styles.menuItem}>View</Link>
+        <Link href="/download" style={styles.menuItem}>Uploaded Download</Link>
+
+        <Link href="/generate" style={styles.menuItem}>
+          Generate QR
+        </Link>
+        <Link href="/generated-view" style={styles.menuItem}>Generated QR Codes</Link>
+        <Link href="/generate-download" style={styles.menuItem}>Generate QR Download</Link>
+        <Link href="/all-qr-records" style={styles.menuItem}>
+          All QR Records Download
+        </Link>
+        <Link href="/logout" style={styles.menuItem}>Logout</Link>
+      </aside>
+
+      <main style={styles.container}>
+        <h1>Excel to QR Code Generator</h1>
+        <p style={styles.subtitle}>
+          Upload calibration Excel file. QR code will be generated for each instrument.
+        </p>
+
+        <div style={styles.uploadBox}>
+          <label style={styles.uploadBtn}>
+            Select Excel File
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              hidden
+              onChange={handleFileUpload}
+            />
+          </label>
+        </div>
+
+        {rows.length > 0 && (
+          <h3>Generated QR Codes ({rows.length})</h3>
+        )}
+
+        <div style={styles.grid}>
+          {rows.map((row, i) => (
+            <div key={`${row.id}-${i}`} style={styles.card}>
+              <div style={styles.cardHeader}>Record #{i + 1}</div>
+
+              <div style={styles.content}>
+                <div style={styles.left}>
+                  <div><b>Instrument:</b> {row.InstrumentName}</div>
+                  <div><b>Equipments No:</b> {row.InstRefNo}</div>
+                  <div><b>Make:</b> {row.Make}</div>
+                  <div><b>Location:</b> {row.Location}</div>
+                  <div><b>Range:</b> {row.InstRange}</div>
+                  <div><b>Least Count:</b> {row.LeastCount}</div>
+                  <div><b>Use Range:</b> {row.RangeOfUse}</div>
+                  <div><b>Calibration:</b> {row.CalibRange}</div>
+                  <div><b>Frequency:</b> {row.Frequency}</div>
+                  <div><b>Performed By:</b> {row.PerformedBy}</div>
+                  <div><b>Due On:</b> {formatDate(row.CalibDueOn)}</div>
+                </div>
+
+                <img src={row.qrCode} alt="QR" style={styles.qr} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+
+const styles: Record<string, CSSProperties> = {
+  layout: {
+    display: "flex",
+    minHeight: "100vh",
+  },
+
+  sidebar: {
+    width: 220,
+    background: "#1f2937",
+    color: "#fff",
+    padding: 20,
+    display: "flex",
+    flexDirection: "column", // ✅ now correctly typed
+    gap: 12,
+  },
+
+  logo: {
+    textAlign: "center",
+    marginBottom: 20,
+    fontWeight: "bold",
+  },
+
+  menuItem: {
+    color: "#fff",
+    textDecoration: "none",
+    padding: 10,
+    borderRadius: 6,
+    background: "#374151",
+  },
+
+  menuItemActive: {
+    color: "#fff",
+    textDecoration: "none",
+    padding: 10,
+    borderRadius: 6,
+    background: "#2563eb",
+  },
+
+  container: {
+    flex: 1,
+    padding: 30,
+    overflowY: "auto",
+  },
+
+  title: {
+    marginBottom: 10,
+    fontWeight: "bold",
+  },
+
+  subtitle: {
+    color: "#6b7280",
+    marginBottom: 20,
+  },
+
+  uploadBox: {
+    marginTop: 20,
+    marginBottom: 20,
+  },
+
+  uploadBtn: {
+    background: "#2563eb",
+    color: "#fff",
+    padding: "10px 16px",
+    borderRadius: 6,
+    cursor: "pointer",
+    display: "inline-block",
+  },
+
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
+    gap: 20,
+    marginTop: 20,
+  },
+
+  card: {
+    border: "1px solid #ddd",
+    borderRadius: 8,
+    background: "#fff",
+    padding: 15,
+  },
+
+  cardHeader: {
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+
+  content: {
+    display: "flex",
+    gap: 15,
+  },
+
+  left: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: "1.6",
+  },
+
+  qr: {
+    width: 130,
+    height: 130,
+    border: "1px solid #ccc",
+    padding: 5,
+  },
+};
