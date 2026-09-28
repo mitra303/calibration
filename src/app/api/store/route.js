@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { db } from "@/app/lib/db";
+import { getCurrentUser } from "@/app/lib/auth";
 
 /* Excel serial date → MySQL YYYY-MM-DD */
 function excelDateToMySQLDate(serial) {
@@ -11,8 +12,24 @@ function excelDateToMySQLDate(serial) {
   return date.toISOString().split("T")[0];
 }
 
+/* Normalize a CalibDueOn cell to a valid MySQL date, or null if it isn't one
+   (e.g. free text like "obsolete", "NA") so one bad row can't fail the whole batch */
+function sanitizeCalibDueOn(value) {
+  if (typeof value === "number") return excelDateToMySQLDate(value);
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value.trim());
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split("T")[0];
+    }
+  }
+  return null;
+}
+
 export async function POST(req) {
   try {
+    const currentUser = await getCurrentUser(req);
+    const department = currentUser?.department || "Quality Assurance";
+    const uploadedBy = currentUser?.name || currentUser?.email || "Unknown";
     const rows = await req.json();
 
     /* 🔐 Remove duplicate IDs (important when barcode copied multiple times) */
@@ -33,7 +50,8 @@ export async function POST(req) {
       INSERT INTO instruments (
         id, SrNo, InstrumentName, InstRefNo, Make, Location,
         InstRange, LeastCount, RangeOfUse, CalibRange,
-        Frequency, PerformedBy, CalibDueOn, qrCode, FormNo
+        Frequency, PerformedBy, CalibDueOn, qrCode, FormNo, department,
+        UploadedBy, UploadedAt
       ) VALUES ?
       ON DUPLICATE KEY UPDATE
         InstrumentName = VALUES(InstrumentName),
@@ -48,7 +66,9 @@ export async function POST(req) {
         PerformedBy = VALUES(PerformedBy),
         CalibDueOn = VALUES(CalibDueOn),
         qrCode = VALUES(qrCode),
-        FormNo = VALUES(FormNo)
+        FormNo = VALUES(FormNo),
+        UploadedBy = VALUES(UploadedBy),
+        UploadedAt = VALUES(UploadedAt)
     `;
 // MIPL-CA-001-07 FormNo
     const values = uniqueRows.map((r) => [
@@ -64,11 +84,12 @@ export async function POST(req) {
       r.CalibRange || null,
       r.Frequency || null,
       r.PerformedBy || null,
-      typeof r.CalibDueOn === "number"
-        ? excelDateToMySQLDate(r.CalibDueOn)
-        : r.CalibDueOn || null,
+      sanitizeCalibDueOn(r.CalibDueOn),
       r.qrCode || null,
-       "MIPL-CA-001-07"
+       "MIPL-CA-001-07",
+      department,
+      uploadedBy,
+      new Date(),
     ]);
 
     await db.query(sql, [values]);

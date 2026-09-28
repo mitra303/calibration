@@ -2,10 +2,13 @@
 
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import jsPDF from "jspdf";
+import Sidebar from "@/app/components/Sidebar";
+import Header from "@/app/components/Header";
+import ConfirmModal from "@/app/components/ConfirmModal";
+import { Search, QrCode, Download, Printer, FileDown, Trash2 } from "lucide-react";
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 10;
 
 /* ✅ DATA TYPE */
 interface QRItem {
@@ -14,6 +17,8 @@ interface QRItem {
   qrCode?: string | null;
   InstRefNo?: string | null;
   CalibDueOn?: string | null;   // ✅ ADD THIS
+  department?: string | null;
+  instrument_id?: string | null;
 }
 
 // "MIPL/MG/76,87,77,78" -> "MIPL/MG/76,MIPL/MG/87,MIPL/MG/77,MIPL/MG/78"
@@ -43,6 +48,9 @@ export default function GenerateQRDownload() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [downloadingAll, setDownloadingAll] = useState(false);
+  const [goToPage, setGoToPage] = useState("");
+  const [deleteItem, setDeleteItem] = useState<QRItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // only the current page's records (with QR images) are fetched from the
   // server now, instead of the entire dataset on every load
@@ -86,11 +94,8 @@ export default function GenerateQRDownload() {
 
 
 
-  const getDisplayColor = (item: QRItem) => {
-    return item.InstRefNo && item.InstRefNo.trim() !== ""
-      ? "green"
-      : "#000"; // or gray / default
-  };
+  const hasInstRefNo = (item: QRItem) =>
+    Boolean(item.InstRefNo && item.InstRefNo.trim() !== "");
 
   /* 📄 PAGINATION (server-side: `list` is already just this page's items) */
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
@@ -283,22 +288,12 @@ export default function GenerateQRDownload() {
       {/* RESPONSIVE STYLES (mobile/tablet) */}
       <style>{`
         @media (max-width: 900px) {
-          .qr-layout { flex-direction: column !important; }
-          .qr-sidebar {
-            width: 100% !important;
-            flex-direction: row !important;
-            flex-wrap: wrap !important;
-            gap: 8px !important;
-            padding: 12px !important;
-          }
-          .qr-sidebar h2 { width: 100%; margin-bottom: 4px !important; }
-          .qr-sidebar a { flex: 1 1 auto; text-align: center; }
           .qr-container { padding: 16px !important; }
           .qr-filterbar { flex-direction: column !important; align-items: stretch !important; }
           .qr-filters-left { flex-wrap: wrap !important; }
           .qr-search, .qr-date { width: 100% !important; }
           .qr-pdf-btn { width: 100% !important; }
-          .qr-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important; gap: 12px !important; }
+          .qr-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; gap: 12px !important; }
         }
 
         @media (max-width: 480px) {
@@ -310,28 +305,16 @@ export default function GenerateQRDownload() {
       `}</style>
 
       <div style={styles.layout} className="qr-layout">
-      {/* SIDEBAR */}
-      <aside style={styles.sidebar} className="qr-sidebar">
-        <h2 style={styles.logo}>Calibration</h2>
-        <Link href="/dashboard" style={styles.menuItem}>Upload</Link>
-        <Link href="/view" style={styles.menuItem}>View</Link>
-        <Link href="/download" style={styles.menuItem}>Uploaded Download</Link>
-        <Link href="/generate" style={styles.menuItem}>Generate QR</Link>
-        <Link href="/generated-view" style={styles.menuItem}>
-          Generated QR Codes
-        </Link>
-        <Link href="/generate-download" style={styles.menuItem}>
-          Generate QR Download
-        </Link>
-        <Link href="/all-qr-records" style={styles.menuItemActive}>
-          All QR Records Download
-        </Link>
-        <Link href="/logout" style={styles.menuItem}>Logout</Link>
-      </aside>
+      <Sidebar />
 
-      {/* MAIN */}
-      <main style={styles.container} className="qr-container">
-        <h2 style={styles.title}>Download Generated QR Codes</h2>
+      <div style={styles.mainCol}>
+        <Header />
+        {/* MAIN */}
+        <main style={styles.container} className="qr-container">
+        <div style={styles.titleRow}>
+          <h2 style={styles.title}>Download Generated QR Codes</h2>
+          <span style={styles.totalBadge}>{total} Total</span>
+        </div>
 
         {/* 🔍 SEARCH */}
         <div style={styles.filterBar} className="qr-filterbar">
@@ -339,17 +322,20 @@ export default function GenerateQRDownload() {
           <div style={styles.filtersLeft} className="qr-filters-left">
 
             {/* SEARCH */}
-            <input
-              type="text"
-              placeholder="Search by QR ID..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              style={styles.search}
-              className="qr-search"
-            />
+            <div style={styles.searchWrap} className="qr-search-wrap">
+              <Search size={16} color="#94a3b8" style={styles.searchIcon} />
+              <input
+                type="text"
+                placeholder="Search by QR ID..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                style={styles.search}
+                className="qr-search"
+              />
+            </div>
 
             {/* FROM DATE */}
             <input
@@ -394,50 +380,83 @@ export default function GenerateQRDownload() {
           <button
             onClick={downloadAllPDF}
             disabled={total === 0 || downloadingAll}
-            style={styles.pdfBtn}
+            style={{
+              ...styles.pdfBtn,
+              opacity: total === 0 || downloadingAll ? 0.6 : 1,
+              cursor: total === 0 || downloadingAll ? "not-allowed" : "pointer",
+            }}
             className="qr-pdf-btn"
           >
+            <FileDown size={16} />
             {downloadingAll ? "Preparing PDF..." : "Download All QR (PDF)"}
           </button>
 
         </div>
 
         {list.length === 0 ? (
-          <p style={{ textAlign: "center", marginTop: 40, fontWeight: "bold" }}>
-            No QR Code Found
-          </p>
+          <div style={styles.emptyState}>
+            <QrCode size={30} color="#94a3b8" />
+            <p style={styles.emptyText}>No QR Code Found</p>
+          </div>
         ) : (
           <>
             <div style={styles.grid} className="qr-grid">
               {list.map(item => (
                 <div key={item.react_key} style={styles.card} className="qr-card">
-                  {item.qrCode && (
-                    <img src={item.qrCode} alt="QR" style={styles.qr} />
+                  {item.department && (
+                    <div
+                      style={{
+                        ...styles.deptBadge,
+                        color: item.department === "Quality Control" ? "#9333ea" : "#2563eb",
+                        background: item.department === "Quality Control" ? "#faf5ff" : "#eff6ff",
+                      }}
+                    >
+                      {item.department}
+                    </div>
                   )}
-                  {/* <div style={{ fontSize: 12, marginTop: 6 }}>
-                    ID: {item.qr_id}
-                  </div> */}
 
-                  <div style={{ marginTop: 6, fontSize: 12 }}>
-                    <b>ID:</b>  <span style={{ color: getDisplayColor(item) }}>
+                  <div style={styles.qrWrap}>
+                    {item.qrCode && (
+                      <img src={item.qrCode} alt="QR" style={styles.qr} />
+                    )}
+                  </div>
+
+                  <div style={styles.idRow}>
+                    <span style={styles.idLabel}>ID</span>
+                    <span
+                      style={{
+                        ...styles.idValue,
+                        color: hasInstRefNo(item) ? "#16a34a" : "#334155",
+                      }}
+                    >
                       {getDisplayId(item)}
                     </span>
                   </div>
 
-
-                  <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "center", width: "100%" }}>
                     <button
                       onClick={() => downloadQR(item.qrCode, getDisplayId(item))}
                       style={styles.downloadBtn}
+                      title="Download"
                     >
+                      <Download size={13} />
                       Download
                     </button>
 
                     <button
                       onClick={() => printQR(item.qrCode, getDisplayId(item))}
                       style={styles.printBtn}
+                      title="Print"
                     >
-                      Print
+                      <Printer size={13} />
+                    </button>
+
+                    <button
+                      onClick={() => setDeleteItem(item)}
+                      style={styles.deleteBtn}
+                      title="Delete"
+                    >
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
@@ -450,21 +469,86 @@ export default function GenerateQRDownload() {
                 <button
                   disabled={page === 1}
                   onClick={() => setPage(p => p - 1)}
+                  style={{
+                    ...styles.pageBtn,
+                    opacity: page === 1 ? 0.5 : 1,
+                    cursor: page === 1 ? "not-allowed" : "pointer",
+                  }}
                 >
                   ◀ Prev
                 </button>
-                <span>Page {page} of {totalPages}</span>
+                <span style={styles.pageInfo}>Page {page} of {totalPages}</span>
                 <button
                   disabled={page === totalPages}
                   onClick={() => setPage(p => p + 1)}
+                  style={{
+                    ...styles.pageBtn,
+                    opacity: page === totalPages ? 0.5 : 1,
+                    cursor: page === totalPages ? "not-allowed" : "pointer",
+                  }}
                 >
                   Next ▶
                 </button>
+
+                <form
+                  style={styles.goToForm}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const n = parseInt(goToPage, 10);
+                    if (!isNaN(n) && n >= 1 && n <= totalPages) {
+                      setPage(n);
+                    }
+                    setGoToPage("");
+                  }}
+                >
+                  <span style={styles.goToLabel}>Go to</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={goToPage}
+                    onChange={(e) => setGoToPage(e.target.value)}
+                    placeholder="Page"
+                    style={styles.goToInput}
+                  />
+                  <button type="submit" style={styles.goToBtn}>
+                    Go
+                  </button>
+                </form>
               </div>
             )}
           </>
         )}
-      </main>
+        </main>
+      </div>
+
+      {deleteItem && (
+        <ConfirmModal
+          title="Delete this QR record?"
+          message="This action cannot be undone. The instrument and/or QR entry will be permanently removed."
+          confirmLabel="Delete"
+          loading={deleting}
+          onCancel={() => setDeleteItem(null)}
+          onConfirm={async () => {
+            setDeleting(true);
+            try {
+              const params = new URLSearchParams();
+              if (deleteItem.instrument_id) params.set("instrumentId", String(deleteItem.instrument_id));
+              if (deleteItem.qr_id) params.set("qrId", deleteItem.qr_id);
+
+              await fetch(`/api/qr/all-qr-records?${params.toString()}`, {
+                method: "DELETE",
+              });
+
+              setList((prev) => prev.filter((i) => i.react_key !== deleteItem.react_key));
+              setTotal((prev) => Math.max(0, prev - 1));
+              setDeleteItem(null);
+            } finally {
+              setDeleting(false);
+            }
+          }}
+        />
+      )}
     </div>
     </>
   );
@@ -472,93 +556,219 @@ export default function GenerateQRDownload() {
 
 /* 🎨 STYLES */
 const styles: { [key: string]: CSSProperties } = {
-  layout: { display: "flex", minHeight: "100vh" },
-  sidebar: {
-    width: 220,
-    background: "#1f2937",
-    color: "#fff",
-    padding: 20,
+  layout: { display: "flex", minHeight: "100vh", background: "#f8fafc" },
+  mainCol: { flex: 1, display: "flex", flexDirection: "column", minWidth: 0 },
+  container: { flex: 1, padding: 36 },
+
+  titleRow: {
     display: "flex",
-    flexDirection: "column",
-    gap: 12,
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 20,
+    flexWrap: "wrap",
   },
-  logo: { textAlign: "center", marginBottom: 20, fontWeight: "bold" },
-  menuItem: {
-    color: "#fff",
-    textDecoration: "none",
-    padding: 10,
-    borderRadius: 6,
-    background: "#374151",
+
+  title: { margin: 0, fontWeight: 700, fontSize: 22, color: "#0f172a" },
+
+  totalBadge: {
+    fontSize: 12.5,
+    fontWeight: 700,
+    color: "#2563eb",
+    background: "#eff6ff",
+    padding: "5px 12px",
+    borderRadius: 999,
   },
-  menuItemActive: {
-    color: "#fff",
-    textDecoration: "none",
-    padding: 10,
-    borderRadius: 6,
-    background: "#2563eb",
+
+  searchWrap: {
+    position: "relative",
   },
-  container: { flex: 1, padding: 30 },
-  title: { marginBottom: 10, fontWeight: "bold" },
+
+  searchIcon: {
+    position: "absolute",
+    left: 12,
+    top: "50%",
+    transform: "translateY(-50%)",
+  },
+
   search: {
-    padding: "10px 12px",
-    width: 250,
-    height: 38,
-    borderRadius: 6,
-    border: "1px solid #ccc",
+    padding: "10px 12px 10px 34px",
+    width: 200,
+    height: 40,
+    borderRadius: 10,
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
+    outline: "none",
+    boxSizing: "border-box",
   },
   pdfBtn: {
-    height: 40,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    height: 42,
     padding: "0 18px",
-    background: "#dc2626",
+    background: "linear-gradient(135deg, #dc2626, #ea580c)",
     color: "#fff",
     border: "none",
-    borderRadius: 6,
-    cursor: "pointer",
-    fontWeight: "bold",
+    borderRadius: 10,
+    fontWeight: 600,
+    fontSize: 14,
+    boxShadow: "0 6px 18px rgba(220,38,38,0.25)",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    padding: "60px 0",
+    color: "#94a3b8",
+  },
+  emptyText: {
+    margin: 0,
+    fontSize: 14,
+    fontWeight: 500,
   },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-    gap: 20,
+    gap: 18,
   },
   card: {
-    border: "1px solid #ddd",
-    borderRadius: 8,
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
     background: "#fff",
-    padding: 15,
+    padding: 18,
     textAlign: "center",
+    boxShadow: "0 2px 10px rgba(15,23,42,0.04)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
   },
-  qr: { width: "75px", height: "75px", border: "1px solid #ccc", padding: 5 },
+  deptBadge: {
+    fontWeight: 600,
+    fontSize: 10.5,
+    padding: "3px 9px",
+    borderRadius: 999,
+    marginBottom: 10,
+  },
+  qrWrap: {
+    background: "#f8fafc",
+    border: "1px solid #f1f5f9",
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+  },
+  qr: { width: "75px", height: "75px", display: "block" },
+  idRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 14,
+  },
+  idLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#94a3b8",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  idValue: {
+    fontSize: 13,
+    fontWeight: 700,
+  },
   downloadBtn: {
-    marginTop: 10,
-    padding: "6px 12px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    flex: 1,
+    padding: "7px 10px",
     background: "#16a34a",
     color: "#fff",
     border: "none",
-    borderRadius: 6,
+    borderRadius: 8,
     cursor: "pointer",
     fontSize: 12,
+    fontWeight: 600,
   },
   printBtn: {
-    marginTop: 10,
-    padding: "6px 12px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 32,
+    height: 32,
+    flexShrink: 0,
     background: "#2563eb",
     color: "#fff",
     border: "none",
-    borderRadius: 6,
+    borderRadius: 8,
     cursor: "pointer",
-    fontSize: 12,
+  },
+  deleteBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 32,
+    height: 32,
+    flexShrink: 0,
+    background: "#fee2e2",
+    color: "#dc2626",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
   },
   pagination: {
-    marginTop: 25,
+    marginTop: 28,
     display: "flex",
     gap: 15,
     justifyContent: "center",
     alignItems: "center",
+    flexWrap: "wrap",
+  },
+  pageBtn: {
+    padding: "8px 16px",
+    borderRadius: 8,
+    border: "1px solid #e2e8f0",
+    background: "#fff",
+    fontWeight: 500,
+    fontSize: 13,
+  },
+  goToForm: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  goToLabel: {
+    fontSize: 13,
+    color: "#64748b",
+    fontWeight: 500,
+  },
+  goToInput: {
+    width: 64,
+    padding: "7px 10px",
+    borderRadius: 8,
+    border: "1px solid #e2e8f0",
+    fontSize: 13,
+    outline: "none",
+  },
+  goToBtn: {
+    padding: "7px 14px",
+    borderRadius: 8,
+    border: "none",
+    background: "linear-gradient(135deg, #2563eb, #9333ea)",
+    color: "#fff",
+    fontWeight: 600,
+    fontSize: 13,
+    cursor: "pointer",
+  },
+  pageInfo: {
+    fontSize: 13,
+    color: "#64748b",
+    fontWeight: 500,
   },
   topBar: {
     display: "flex",
-    justifyContent: "space-between", // left & right
+    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
   },
@@ -579,18 +789,18 @@ const styles: { [key: string]: CSSProperties } = {
 
   dateInput: {
     padding: "10px 12px",
-    height: 38,
-    borderRadius: 6,
-    border: "1px solid #ccc",
+    height: 40,
+    borderRadius: 10,
+    border: "1px solid #e2e8f0",
   },
   resetBtn: {
-    height: 38,
+    height: 40,
     padding: "0 16px",
-    background: "#6b7280",
+    background: "#64748b",
     color: "#fff",
     border: "none",
-    borderRadius: 6,
+    borderRadius: 10,
     cursor: "pointer",
-    fontWeight: "bold",
+    fontWeight: 600,
   },
 };

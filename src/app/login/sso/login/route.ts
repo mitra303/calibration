@@ -36,8 +36,20 @@ export async function GET(req: NextRequest) {
     const email = centralUser?.email;
     const fullName = centralUser?.full_name;
 
+    const rawDepartment = centralUser?.department;
+    const department =
+      (typeof rawDepartment === "string" ? rawDepartment : rawDepartment?.name) ||
+      "";
+
     if (!email) {
       return NextResponse.redirect(new URL("/login", origin));
+    }
+
+    const ALLOWED_DEPARTMENTS = ["Quality Control", "Quality Assurance", "IT"];
+    if (!ALLOWED_DEPARTMENTS.includes(department)) {
+      return NextResponse.redirect(
+        new URL("/login?error=unauthorized_department", origin)
+      );
     }
 
     const [rows]: any = await db.query(
@@ -50,9 +62,14 @@ export async function GET(req: NextRequest) {
       const hash = await bcrypt.hash(randomPassword, 10);
 
       await db.query(
-        "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-        [fullName || email, email, hash]
+        "INSERT INTO users (name, email, password, department) VALUES (?, ?, ?, ?)",
+        [fullName || email, email, hash, department]
       );
+    } else {
+      await db.query("UPDATE users SET department = ? WHERE email = ?", [
+        department,
+        email,
+      ]);
     }
 
     const response = NextResponse.redirect(new URL("/dashboard", origin));

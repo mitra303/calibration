@@ -27,7 +27,7 @@ cron.schedule("39 12 * * *", async () => {
   console.log("🔔 Calibration reminder job running...");
 
   const [records] = await db.query(`
-SELECT 
+SELECT
   COALESCE(i.InstrumentName, ie.InstrumentName) AS InstrumentName,
   COALESCE(i.InstRefNo, ie.InstRefNo) AS InstRefNo,
   COALESCE(i.Make, ie.Make) AS Make,
@@ -41,16 +41,17 @@ SELECT
   COALESCE(i.EffectiveDate, STR_TO_DATE(ie.EffectiveDate, '%Y-%m-%d')) AS EffectiveDate,
   COALESCE(i.CalibDueOn, STR_TO_DATE(ie.CalibDueOn, '%Y-%m-%d')) AS CalibDueOn,
   COALESCE(i.ReviewDate, STR_TO_DATE(ie.ReviewDate, '%Y-%m-%d')) AS ReviewDate,
-  COALESCE(i.qrCode, ie.qrCode) AS qrCode
+  COALESCE(i.qrCode, ie.qrCode) AS qrCode,
+  COALESCE(i.department, ie.department) AS department
 
 FROM instruments i
-LEFT JOIN instrument_entries ie 
+LEFT JOIN instrument_entries ie
   ON i.InstRefNo = ie.InstRefNo
   WHERE i.isDeleted = 0
 
 UNION
 
-SELECT 
+SELECT
   COALESCE(i.InstrumentName, ie.InstrumentName),
   COALESCE(i.InstRefNo, ie.InstRefNo),
   COALESCE(i.Make, ie.Make),
@@ -64,10 +65,11 @@ SELECT
   COALESCE(i.EffectiveDate, STR_TO_DATE(ie.EffectiveDate, '%Y-%m-%d')),
   COALESCE(i.CalibDueOn, STR_TO_DATE(ie.CalibDueOn, '%Y-%m-%d')),
   COALESCE(i.ReviewDate, STR_TO_DATE(ie.ReviewDate, '%Y-%m-%d')),
-  COALESCE(i.qrCode, ie.qrCode)
+  COALESCE(i.qrCode, ie.qrCode),
+  COALESCE(i.department, ie.department)
 
 FROM instrument_entries ie
-LEFT JOIN instruments i 
+LEFT JOIN instruments i
   ON i.InstRefNo = ie.InstRefNo
 WHERE ie.EffectiveDate IS NOT NULL
   AND ie.InstRefNo IS NOT NULL
@@ -125,10 +127,15 @@ WHERE ie.EffectiveDate IS NOT NULL
     process.exit(0);
   }
 
-  /* ===== GENERATE PDF ===== */
-  const pdfPath = await generateReminderPdf(dueRecords);
+  /* ===== SPLIT BY DEPARTMENT ===== */
+  const qaRecords = dueRecords.filter((r) => r.department !== "Quality Control");
+  const qcRecords = dueRecords.filter((r) => r.department === "Quality Control");
 
-  /* ===== SEND SINGLE MAIL ===== */
+  const RECIPIENTS = {
+    qa: "qad1@mitraindustries.com, qa_khushi@mitraindustries.com, gopal.sharma@mitraindustries.com, nitish@mitraindustries.com",
+    qc: "vivek.kumar@mitraindustries.com, Madhu.Jha@mitraindustries.com, divya@mitraindustries.com, roshan.chaudhary@mitraindustries.com, nitish@mitraindustries.com",
+  };
+
   const transporter = nodemailer.createTransport({
     host: "smtp.office365.com",
     port: 587,
@@ -139,13 +146,20 @@ WHERE ie.EffectiveDate IS NOT NULL
     },
   });
 
-  await transporter.sendMail({
-    from: `"Calibration System" <${process.env.MAIL_USER}>`,
-     //to: "nitish@mitraindustries.com",
-    to: "qad1@mitraindustries.com, qa_khushi@mitraindustries.com, gopal.sharma@mitraindustries.com, nitish@mitraindustries.com",
-    subject: `⏰ Calibration Due Report (${dueRecords.length} Instruments)`,
+  const sendDepartmentMail = async (label, records, to) => {
+    if (records.length === 0) {
+      console.log(`⏭ Skipping ${label} mail — no due records`);
+      return;
+    }
 
-    text: `Dear Team,
+    const pdfPath = await generateReminderPdf(records);
+
+    await transporter.sendMail({
+      from: `"Calibration System" <${process.env.MAIL_USER}>`,
+      to,
+      subject: `⏰ Calibration Due Report - ${label} (${records.length} Instruments)`,
+
+      text: `Dear Team,
 
 Please find attached the Calibration Due Summary Report for your review.
 
@@ -153,14 +167,19 @@ The report highlights instruments that are approaching their calibration due dat
 
 Kindly let us know if any clarification or additional details are required.`,
 
-    attachments: [
-      {
-        filename: `Calibration-Due-Report-${today2}.pdf`,
-        path: pdfPath,
-      },
-    ],
-  });
+      attachments: [
+        {
+          filename: `Calibration-Due-Report-${label}-${today2}.pdf`,
+          path: pdfPath,
+        },
+      ],
+    });
 
-  console.log("✅ Single summary mail sent successfully");
+    console.log(`✅ ${label} summary mail sent successfully`);
+  };
+
+  await sendDepartmentMail("Quality Assurance", qaRecords, RECIPIENTS.qa);
+  await sendDepartmentMail("Quality Control", qcRecords, RECIPIENTS.qc);
+
   process.exit(0);
 });

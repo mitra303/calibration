@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { db } from "@/app/lib/db";
 import jwt from "jsonwebtoken";
+import { getCurrentUser } from "@/app/lib/auth";
 
 export async function GET(req, context) {
 
@@ -26,6 +27,14 @@ export async function GET(req, context) {
   }
 
   const row = rows[0];
+
+  const currentUser = await getCurrentUser(req);
+  if (currentUser?.department === "Quality Control" && row.department !== "Quality Control") {
+    return Response.json(
+      { message: "Record not found" },
+      { status: 404 }
+    );
+  }
 
   const formatDate = (date) => {
     if (!date) return null;
@@ -58,23 +67,16 @@ export async function PUT(req, context) {
     const { id } = await params;
     const body = await req.json();
 
-    // ✅ correct cookie usage
-    const cookieHeader = req.headers.get("cookie") || "";
-    const cookiesObj = Object.fromEntries(
-      cookieHeader.split("; ").map(c => {
-        const [k, v] = c.split("=");
-        return [k, decodeURIComponent(v)];
-      })
-    );
+    const currentUser = await getCurrentUser(req);
 
-    const email = cookiesObj.userEmail;
-
-    if (!email) {
+    if (!currentUser) {
       return Response.json(
         { success: false, message: "No email in cookie" },
         { status: 401 }
       );
     }
+
+    const email = currentUser.email;
 
     const [result] = await db.query(
       `UPDATE instruments

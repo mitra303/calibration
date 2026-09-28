@@ -1,9 +1,11 @@
 import { db } from "@/app/lib/db";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/app/lib/auth";
 
 export async function POST(req) {
   try {
     const data = await req.json();
+    const currentUser = await getCurrentUser(req);
 
     /* ================= BASIC VALIDATION ================= */
 
@@ -130,8 +132,9 @@ export async function POST(req) {
         FormNo,
         EffectiveDate,
         ReviewDate,
-        mail_status
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        mail_status,
+        department
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `,
       [
         data.qr_id,
@@ -150,6 +153,7 @@ export async function POST(req) {
         data.EffectiveDate || null,
         data.ReviewDate || null,
         1, // ALWAYS 1 for new entry
+        currentUser?.department || "Quality Assurance",
       ]
     );
 

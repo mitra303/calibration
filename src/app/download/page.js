@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
+import Sidebar from "@/app/components/Sidebar";
+import Header from "@/app/components/Header";
+import { FileDown, Calendar, RotateCcw } from "lucide-react";
 
 export default function DownloadPage() {
   const [rows, setRows] = useState([]);
@@ -126,46 +128,20 @@ export default function DownloadPage() {
   };
 
   return (
+    <>
+    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     <div style={styles.layout}>
-      {/* SIDEBAR */}
-      <aside style={styles.sidebar}>
-        <h2 style={styles.logo}>Calibration</h2>
+      <Sidebar />
 
-        <Link href="/dashboard" style={styles.menuItem}>
-          Upload
-        </Link>
-        <Link href="/view" style={styles.menuItem}>
-          View
-        </Link>
-
-        <Link href="/download" style={styles.menuItemActive}>
-          Uploaded Download
-        </Link>
-
-        <Link href="/generate" style={styles.menuItem}>
-          Generate QR
-        </Link>
-
-        <Link href="/generated-view" style={styles.menuItem}>
-          Generated QR Codes
-        </Link>
-
-        <Link href="/generate-download" style={styles.menuItem}>
-          Generate QR Download
-        </Link>
-
-        <Link href="/all-qr-records" style={styles.menuItem}>
-          All QR Records Download
-        </Link>
-
-        <Link href="/logout" style={styles.menuItem}>
-          Logout
-        </Link>
-      </aside>
-
-      {/* MAIN */}
-      <main style={styles.container}>
+      <div style={styles.mainCol}>
+        <Header />
+        {/* MAIN */}
+        <main style={styles.container}>
         <div style={styles.card}>
+          <div style={styles.iconBadge}>
+            <FileDown size={26} color="#fff" />
+          </div>
+
           <h2 style={styles.title}>Upload QR code to download</h2>
 
           <p style={styles.subtitle}>
@@ -175,7 +151,9 @@ export default function DownloadPage() {
           {/* DATE FILTER */}
           <div style={styles.dateContainer}>
             <div style={styles.field}>
-              <label style={styles.label}>Start Date</label>
+              <label style={styles.label}>
+                <Calendar size={13} /> Start Date
+              </label>
               <input
                 type="date"
                 value={startDate}
@@ -185,7 +163,9 @@ export default function DownloadPage() {
             </div>
 
             <div style={styles.field}>
-              <label style={styles.label}>End Date</label>
+              <label style={styles.label}>
+                <Calendar size={13} /> End Date
+              </label>
               <input
                 type="date"
                 value={endDate}
@@ -206,6 +186,11 @@ export default function DownloadPage() {
                   cursor: loading ? "not-allowed" : "pointer"
                 }}
               >
+                {loading ? (
+                  <span style={styles.spinner} />
+                ) : (
+                  <FileDown size={16} />
+                )}
                 {loading ? "Generating PDF..." : "Download QR PDF"}
             </button>
 
@@ -216,12 +201,15 @@ export default function DownloadPage() {
               }}
               style={styles.resetBtn}
             >
+              <RotateCcw size={15} />
               Reset
             </button>
           </div>
         </div>
-      </main>
+        </main>
+      </div>
     </div>
+    </>
   );
 }
 
@@ -229,38 +217,14 @@ const styles = {
   layout: {
     display: "flex",
     minHeight: "100vh",
+    background: "#f8fafc",
   },
 
-  sidebar: {
-    width: 220,
-    background: "#1f2937",
-    color: "#fff",
-    padding: 20,
+  mainCol: {
+    flex: 1,
     display: "flex",
     flexDirection: "column",
-    gap: 12,
-  },
-
-  logo: {
-    textAlign: "center",
-    marginBottom: 20,
-    fontWeight: "bold",
-  },
-
-  menuItem: {
-    color: "#fff",
-    textDecoration: "none",
-    padding: 10,
-    borderRadius: 6,
-    background: "#374151",
-  },
-
-  menuItemActive: {
-    color: "#fff",
-    textDecoration: "none",
-    padding: 10,
-    borderRadius: 6,
-    background: "#2563eb",
+    minWidth: 0,
   },
 
   container: {
@@ -269,28 +233,40 @@ const styles = {
     justifyContent: "center",
     alignItems: "flex-start",
     padding: "60px 20px",
-    background: "#ffffff",
   },
 
 card: {
   width: "100%",
-  maxWidth: "650px",
-  background: "linear-gradient(135deg, #ffffff, #eef2ff)",
-  padding: "35px",
-  borderRadius: "12px",
-  border: "1px solid #e0e7ff",
-  boxShadow: "0 10px 25px rgba(37,99,235,0.15)",
+  maxWidth: "600px",
+  background: "#fff",
+  padding: "40px",
+  borderRadius: "20px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 10px 35px rgba(15,23,42,0.08)",
 },
 
+  iconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    background: "linear-gradient(135deg, #2563eb, #9333ea)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    boxShadow: "0 6px 18px rgba(37,99,235,0.3)",
+  },
+
   title: {
-    fontSize: "24px",
-    fontWeight: "600",
-    marginBottom: "8px",
+    fontSize: "22px",
+    fontWeight: "700",
+    marginBottom: "6px",
+    color: "#0f172a",
   },
 
   subtitle: {
-    color: "#6b7280",
-    marginBottom: "30px",
+    color: "#64748b",
+    marginBottom: "32px",
     fontSize: "14px",
   },
 
@@ -298,7 +274,7 @@ card: {
     display: "flex",
     gap: "20px",
     flexWrap: "wrap",
-    marginBottom: "30px",
+    marginBottom: "32px",
   },
 
   field: {
@@ -306,44 +282,72 @@ card: {
     flexDirection: "column",
     flex: "1",
     minWidth: "200px",
+    gap: "6px",
   },
 
   label: {
-    fontSize: "14px",
-    fontWeight: "500",
-    marginBottom: "6px",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    fontSize: "12.5px",
+    fontWeight: "600",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: "0.3px",
   },
 
   input: {
-    padding: "10px 12px",
-    border: "1px solid #d1d5db",
-    borderRadius: "8px",
+    padding: "11px 14px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px",
     fontSize: "14px",
     outline: "none",
+    background: "#f8fafc",
+    color: "#0f172a",
   },
 
   buttonRow: {
     display: "flex",
-    gap: "15px",
+    gap: "12px",
+    flexWrap: "wrap",
   },
 
   downloadBtn: {
-    background: "#2563eb",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    background: "linear-gradient(135deg, #2563eb, #9333ea)",
     color: "#fff",
     border: "none",
-    padding: "11px 20px",
-    borderRadius: "8px",
+    padding: "12px 22px",
+    borderRadius: "10px",
     fontSize: "14px",
     cursor: "pointer",
-    fontWeight: "500",
+    fontWeight: "600",
+    boxShadow: "0 6px 18px rgba(37,99,235,0.3)",
   },
 
   resetBtn: {
-    background: "#e5e7eb",
-    border: "none",
-    padding: "11px 20px",
-    borderRadius: "8px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    background: "#f1f5f9",
+    color: "#334155",
+    border: "1px solid #e2e8f0",
+    padding: "12px 20px",
+    borderRadius: "10px",
     fontSize: "14px",
+    fontWeight: "600",
     cursor: "pointer",
+  },
+
+  spinner: {
+    width: 14,
+    height: 14,
+    borderRadius: "50%",
+    border: "2px solid rgba(255,255,255,0.4)",
+    borderTopColor: "#fff",
+    display: "inline-block",
+    animation: "spin 0.7s linear infinite",
   },
 };

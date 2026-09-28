@@ -25,6 +25,7 @@ export async function POST(req: Request) {
         id: user.id,
         name: user.name,
         email: user.email,
+        department: user.department,
       },
     });
 
@@ -34,6 +35,14 @@ export async function POST(req: Request) {
       path: "/",
       sameSite: "lax",
       secure: false,
+    });
+
+    res.cookies.set("userEmail", user.email, {
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax",
+      secure: false,
+      maxAge: 60 * 60 * 24,
     });
 
     return res;

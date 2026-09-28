@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
 import { db } from "@/app/lib/db";
+import { getCurrentUser } from "@/app/lib/auth";
 
 export async function GET(req, context) {
   const { params } = context;
@@ -11,6 +12,11 @@ export async function GET(req, context) {
   );
 
   if (rows.length === 0) {
+    return Response.json(null);
+  }
+
+  const currentUser = await getCurrentUser(req);
+  if (currentUser?.department === "Quality Control" && rows[0].department !== "Quality Control") {
     return Response.json(null);
   }
 

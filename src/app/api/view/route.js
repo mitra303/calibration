@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import mysql from "mysql2/promise";
+import { getCurrentUser } from "@/app/lib/auth";
 
 export async function GET(req) {
   try {
+    const currentUser = await getCurrentUser(req);
     const { searchParams } = new URL(req.url);
 
     const page = parseInt(searchParams.get("page") || "1");
@@ -21,6 +23,11 @@ export async function GET(req) {
     /* -------- WHERE clause for search -------- */
     let whereClause = `WHERE isDeleted = false`;
     let params = [];
+
+    if (currentUser?.department === "Quality Control") {
+      whereClause += ` AND department = ?`;
+      params.push("Quality Control");
+    }
 
     // if (search) {
     //   whereClause += `
@@ -61,16 +68,17 @@ export async function GET(req) {
       whereClause += `
     AND (
       ${fullValues.map(() => "InstRefNo = ?").join(" OR ")}
+      OR InstrumentName LIKE ?
     )
   `;
 
-      params = fullValues;
+      params = [...params, ...fullValues, `%${search.trim()}%`];
     }
 
     const [rows] = await connection.query(
       `SELECT * FROM instruments
       ${whereClause}
-      ORDER BY SrNo DESC
+      ORDER BY UploadedAt DESC, CAST(SrNo AS UNSIGNED) DESC
       LIMIT ${Number(limit)} OFFSET ${Number(offset)}
       `,
       params,

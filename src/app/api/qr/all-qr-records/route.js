@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
 import { db } from "@/app/lib/db";
+import { getCurrentUser } from "@/app/lib/auth";
 
 const BASE_QUERY = `
 SELECT * FROM (
@@ -12,6 +13,7 @@ SELECT * FROM (
 
     COALESCE(ie.qrCode, i.qrCode) AS qrCode,
     COALESCE(ie.InstRefNo, i.InstRefNo) AS InstRefNo,
+    COALESCE(ie.department, i.department) AS department,
 
     i.id             AS instrument_id,
     i.SrNo           AS instrument_srno,
@@ -50,6 +52,7 @@ SELECT * FROM (
 
     COALESCE(ie.qrCode, i.qrCode) AS qrCode,
     COALESCE(ie.InstRefNo, i.InstRefNo) AS InstRefNo,
+    COALESCE(ie.department, i.department) AS department,
 
     i.id,
     i.SrNo,
@@ -80,6 +83,7 @@ SELECT * FROM (
 `;
 
 export async function GET(request) {
+  const currentUser = await getCurrentUser(request);
   const { searchParams } = new URL(request.url);
 
   const search = searchParams.get("search") || "";
@@ -91,6 +95,11 @@ export async function GET(request) {
 
   const conditions = [];
   const params = [];
+
+  if (currentUser?.department === "Quality Control") {
+    conditions.push("department = ?");
+    params.push("Quality Control");
+  }
 
   if (search) {
     // supports comma-separated multiple IDs (e.g. "MIPL/MG/76,87,77,78"),
@@ -135,4 +144,45 @@ export async function GET(request) {
   const [rows] = await db.query(dataQuery, dataParams);
 
   return Response.json({ data: rows, total });
+}
+
+export async function DELETE(request) {
+  const currentUser = await getCurrentUser(request);
+  const { searchParams } = new URL(request.url);
+  const instrumentId = searchParams.get("instrumentId");
+  const qrId = searchParams.get("qrId");
+
+  if (!instrumentId && !qrId) {
+    return Response.json({ error: "Nothing to delete" }, { status: 400 });
+  }
+
+  if (currentUser?.department === "Quality Control") {
+    if (instrumentId) {
+      const [rows] = await db.query(
+        "SELECT department FROM instruments WHERE id = ?",
+        [instrumentId]
+      );
+      if (rows.length === 0 || rows[0].department !== "Quality Control") {
+        return Response.json({ error: "Not authorized" }, { status: 403 });
+      }
+    }
+    if (qrId) {
+      const [rows] = await db.query(
+        "SELECT department FROM instrument_entries WHERE qr_id = ?",
+        [qrId]
+      );
+      if (rows.length === 0 || rows[0].department !== "Quality Control") {
+        return Response.json({ error: "Not authorized" }, { status: 403 });
+      }
+    }
+  }
+
+  if (instrumentId) {
+    await db.query("DELETE FROM instruments WHERE id = ?", [instrumentId]);
+  }
+  if (qrId) {
+    await db.query("DELETE FROM instrument_entries WHERE qr_id = ?", [qrId]);
+  }
+
+  return Response.json({ success: true });
 }

@@ -1,8 +1,12 @@
 import { db } from "@/app/lib/db";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
+import { getCurrentUser } from "@/app/lib/auth";
 
-export async function POST() {
+export async function POST(req) {
+  const currentUser = await getCurrentUser(req);
+  const department = currentUser?.department || "Quality Assurance";
+  const uploadedBy = currentUser?.name || currentUser?.email || "Unknown";
 
 function generateShortHexId() {
   const buf = crypto.randomBytes(6); // 12 hex chars total
@@ -20,10 +24,10 @@ function generateShortHexId() {
 
   await db.query(
     `
-    INSERT INTO instrument_entries (qr_id, qrCode)
-    VALUES (?, ?)
+    INSERT INTO instrument_entries (qr_id, qrCode, department, UploadedBy, UploadedAt)
+    VALUES (?, ?, ?, ?, ?)
     `,
-    [qrId, qrUrl]
+    [qrId, qrUrl, department, uploadedBy, new Date()]
   );
 
   return Response.json({

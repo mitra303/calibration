@@ -1,6 +1,8 @@
 import { db } from "@/app/lib/db";
+import { getCurrentUser } from "@/app/lib/auth";
 
 export async function GET(req) {
+  const currentUser = await getCurrentUser(req);
   const { searchParams } = new URL(req.url);
 
   const startDate = searchParams.get("startDate");
@@ -19,6 +21,12 @@ export async function GET(req) {
 
   // ✅ Always filter deleted records
   conditions.push(`isDeleted = 0`);
+
+  // ✅ QC users only see QC department data; QA sees everything
+  if (currentUser?.department === "Quality Control") {
+    conditions.push(`department = ?`);
+    values.push("Quality Control");
+  }
 
   // ✅ Attach WHERE safely
   if (conditions.length > 0) {

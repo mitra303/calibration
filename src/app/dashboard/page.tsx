@@ -3,10 +3,12 @@
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import QRCode from "qrcode";
-import Link from "next/link";
 import type { CSSProperties } from "react";
+import { UploadCloud, FileSpreadsheet } from "lucide-react";
 
 import { v4 as uuidv4 } from "uuid";
+import Sidebar from "@/app/components/Sidebar";
+import Header from "@/app/components/Header";
 
 /* ✅ Define row type */
 interface InstrumentRow {
@@ -29,6 +31,8 @@ interface InstrumentRow {
 export default function Home() {
   /* ✅ FIX: typed state */
   const [rows, setRows] = useState<InstrumentRow[]>([]);
+  const [uploadError, setUploadError] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const formatDate = (
     value: string | number | null | undefined
@@ -46,6 +50,9 @@ export default function Home() {
   ): Promise<void> => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setUploadError("");
+    setUploading(true);
 
     const data = await file.arrayBuffer();
     const workbook = XLSX.read(data);
@@ -97,61 +104,76 @@ export default function Home() {
 
     localStorage.setItem("excelData", JSON.stringify(rowsWithQR));
 
-    await fetch("/api/store", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(rowsWithQR),
-    });
+    try {
+      const res = await fetch("/api/store", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rowsWithQR),
+      });
 
-    setRows(rowsWithQR);
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        setUploadError(
+          result.error || result.message || "Failed to save records to database"
+        );
+        setUploading(false);
+        return;
+      }
+
+      setRows(rowsWithQR);
+    } catch (err) {
+      setUploadError("Something went wrong while uploading. Please try again.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
     <div style={styles.layout}>
-      <aside style={styles.sidebar}>
-        {/* <h2 style={styles.logo}>Calibration</h2> */}
-        <h2 style={styles.logo}>Calibration</h2>
-        <Link href="/dashboard" style={styles.menuItemActive}>Upload</Link>
-        <Link href="/view" style={styles.menuItem}>View</Link>
-        <Link href="/download" style={styles.menuItem}>Uploaded Download</Link>
+      <Sidebar />
 
-        <Link href="/generate" style={styles.menuItem}>
-          Generate QR
-        </Link>
-        <Link href="/generated-view" style={styles.menuItem}>Generated QR Codes</Link>
-        <Link href="/generate-download" style={styles.menuItem}>Generate QR Download</Link>
-        <Link href="/all-qr-records" style={styles.menuItem}>
-          All QR Records Download
-        </Link>
-        <Link href="/logout" style={styles.menuItem}>Logout</Link>
-      </aside>
-
-      <main style={styles.container}>
-        <h1>Excel to QR Code Generator</h1>
+      <div style={styles.mainCol}>
+        <Header />
+        <main style={styles.container}>
+        <h1 style={styles.title}>Excel to QR Code Generator</h1>
         <p style={styles.subtitle}>
           Upload calibration Excel file. QR code will be generated for each instrument.
         </p>
 
-        <div style={styles.uploadBox}>
-          <label style={styles.uploadBtn}>
-            Select Excel File
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              hidden
-              onChange={handleFileUpload}
-            />
-          </label>
-        </div>
+        <label style={styles.uploadBox}>
+          <div style={styles.uploadIconWrap}>
+            <UploadCloud size={26} color="#fff" />
+          </div>
+          <div style={styles.uploadText}>
+            {uploading ? "Uploading..." : "Select Excel File"}
+          </div>
+          <div style={styles.uploadHint}>Click to browse .xlsx or .xls file</div>
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            hidden
+            disabled={uploading}
+            onChange={handleFileUpload}
+          />
+        </label>
+
+        {uploadError && (
+          <div style={styles.errorBanner}>{uploadError}</div>
+        )}
 
         {rows.length > 0 && (
-          <h3>Generated QR Codes ({rows.length})</h3>
+          <div style={styles.resultHeader}>
+            <FileSpreadsheet size={18} color="#2563eb" />
+            <h3 style={styles.resultTitle}>Generated QR Codes ({rows.length})</h3>
+          </div>
         )}
 
         <div style={styles.grid}>
           {rows.map((row, i) => (
             <div key={`${row.id}-${i}`} style={styles.card}>
               <div style={styles.cardHeader}>Record #{i + 1}</div>
+              <div style={styles.cardDivider} />
 
               <div style={styles.content}>
                 <div style={styles.left}>
@@ -173,7 +195,8 @@ export default function Home() {
             </div>
           ))}
         </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
@@ -183,87 +206,129 @@ const styles: Record<string, CSSProperties> = {
   layout: {
     display: "flex",
     minHeight: "100vh",
+    background: "#f8fafc",
   },
 
-  sidebar: {
-    width: 220,
-    background: "#1f2937",
-    color: "#fff",
-    padding: 20,
+  mainCol: {
+    flex: 1,
     display: "flex",
-    flexDirection: "column", // ✅ now correctly typed
-    gap: 12,
-  },
-
-  logo: {
-    textAlign: "center",
-    marginBottom: 20,
-    fontWeight: "bold",
-  },
-
-  menuItem: {
-    color: "#fff",
-    textDecoration: "none",
-    padding: 10,
-    borderRadius: 6,
-    background: "#374151",
-  },
-
-  menuItemActive: {
-    color: "#fff",
-    textDecoration: "none",
-    padding: 10,
-    borderRadius: 6,
-    background: "#2563eb",
+    flexDirection: "column",
+    minWidth: 0,
   },
 
   container: {
     flex: 1,
-    padding: 30,
+    padding: 36,
     overflowY: "auto",
   },
 
   title: {
-    marginBottom: 10,
-    fontWeight: "bold",
+    marginBottom: 6,
+    fontWeight: 700,
+    fontSize: 24,
+    color: "#0f172a",
   },
 
   subtitle: {
-    color: "#6b7280",
-    marginBottom: 20,
+    color: "#64748b",
+    marginBottom: 28,
+    fontSize: 14,
   },
 
   uploadBox: {
-    marginTop: 20,
-    marginBottom: 20,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: 32,
+    padding: "36px 48px",
+    borderRadius: 20,
+    border: "2px dashed #c7d2fe",
+    background: "#fff",
+    cursor: "pointer",
+    maxWidth: 420,
+    transition: "border-color 0.2s, box-shadow 0.2s",
+    boxShadow: "0 4px 16px rgba(37,99,235,0.06)",
   },
 
-  uploadBtn: {
-    background: "#2563eb",
-    color: "#fff",
-    padding: "10px 16px",
-    borderRadius: 6,
-    cursor: "pointer",
-    display: "inline-block",
+  uploadIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    background: "linear-gradient(135deg, #2563eb, #9333ea)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+    boxShadow: "0 6px 18px rgba(37,99,235,0.35)",
+  },
+
+  uploadText: {
+    fontWeight: 600,
+    fontSize: 15,
+    color: "#0f172a",
+  },
+
+  uploadHint: {
+    fontSize: 12.5,
+    color: "#94a3b8",
+  },
+
+  resultHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+
+  errorBanner: {
+    marginTop: 16,
+    marginBottom: 8,
+    maxWidth: 420,
+    padding: "12px 16px",
+    borderRadius: 12,
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#dc2626",
+    fontSize: 13.5,
+    fontWeight: 600,
+  },
+
+  resultTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: "#0f172a",
+    margin: 0,
   },
 
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
     gap: 20,
-    marginTop: 20,
+    marginTop: 8,
   },
 
   card: {
-    border: "1px solid #ddd",
-    borderRadius: 8,
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
     background: "#fff",
-    padding: 15,
+    padding: 18,
+    boxShadow: "0 2px 10px rgba(15,23,42,0.04)",
   },
 
   cardHeader: {
-    fontWeight: "bold",
-    marginBottom: 10,
+    fontWeight: 700,
+    color: "#2563eb",
+    fontSize: 13,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+
+  cardDivider: {
+    height: 1,
+    background: "#f1f5f9",
+    margin: "10px 0 14px",
   },
 
   content: {
@@ -273,14 +338,16 @@ const styles: Record<string, CSSProperties> = {
 
   left: {
     flex: 1,
-    fontSize: 14,
-    lineHeight: "1.6",
+    fontSize: 13.5,
+    lineHeight: "1.7",
+    color: "#334155",
   },
 
   qr: {
     width: 130,
     height: 130,
-    border: "1px solid #ccc",
+    border: "1px solid #e2e8f0",
+    borderRadius: 8,
     padding: 5,
   },
 };

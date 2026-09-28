@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import mysql from "mysql2/promise";
+import { getCurrentUser } from "@/app/lib/auth";
 
 export async function DELETE(
   req: NextRequest,
@@ -16,6 +17,8 @@ export async function DELETE(
       );
     }
 
+    const currentUser = await getCurrentUser(req);
+
     const connection = await mysql.createConnection({
       host: "localhost",
       user: "root",
@@ -23,14 +26,29 @@ export async function DELETE(
       database: "calibration",
     });
 
+    if (currentUser?.department === "Quality Control") {
+      const [rows]: any = await connection.execute(
+        `SELECT department FROM instruments WHERE id = ?`,
+        [id]
+      );
+
+      if (rows.length === 0 || rows[0].department !== "Quality Control") {
+        await connection.end();
+        return NextResponse.json(
+          { error: "Not authorized to delete this record" },
+          { status: 403 }
+        );
+      }
+    }
+
     await connection.execute(
-      `UPDATE instruments SET isDeleted = true WHERE id = ?`,
+      `DELETE FROM instruments WHERE id = ?`,
       [id]
     );
 
     await connection.end();
 
-    return NextResponse.json({ message: "Soft deleted successfully" });
+    return NextResponse.json({ message: "Deleted successfully" });
 
   } catch (error) {
     console.error(error);
