@@ -12,7 +12,7 @@ export async function POST() {
 
     const qrId = generateShortHexId();
 
-    const baseUrl = "http://115.241.45.146:8009";
+    const baseUrl = "http://14.99.235.114:8009";
     const qrUrl = `${baseUrl}/entry/${qrId}`;
 
     await db.query(

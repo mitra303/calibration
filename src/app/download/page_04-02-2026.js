@@ -39,7 +39,7 @@ export default function DownloadPage() {
     //     ? window.location.origin
     //     : "https://hezekiah-architraved-superfantastically.ngrok-free.dev";
     // const qrValue = `https://hezekiah-architraved-superfantastically.ngrok-free.dev/details/${row.id}`;
-    const qrValue = `http://115.241.45.146:8009//details/${row.id}`;
+    const qrValue = `http://14.99.235.114:8009//details/${row.id}`;
     // const qrValue = `${baseUrl}/details/${row.id}`;
     //console.log(qrValue);
 

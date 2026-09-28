@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { db } from "@/app/lib/db";
 
 const CENTRAL_AUTH_URL =
-  "http://115.241.45.146:8016/accounts/auth-subapp/?app_name=Calibration";
+  "http://14.99.235.114:8016/accounts/auth-subapp/?app_name=Calibration";
 
 function resolveOrigin(req: NextRequest) {
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host");

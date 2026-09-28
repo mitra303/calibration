@@ -89,7 +89,7 @@ export default function DownloadPage() {
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
 
-      const qrValue = `http://115.241.45.146:8009/details/${row.id}`;
+      const qrValue = `http://14.99.235.114:8009/details/${row.id}`;
       const qrImage = await QRCode.toDataURL(qrValue);
 
       // QR Image

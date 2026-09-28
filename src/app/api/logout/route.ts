@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
   // 🔁 support redirect chaining
   const redirect = url.searchParams.get("redirect") 
-    || "http://115.241.45.146:8018/login";
+    || "http://14.99.235.114:8018/login";
 
   const response = NextResponse.redirect(redirect);
 

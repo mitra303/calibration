@@ -18,7 +18,7 @@ function generateShortHexId() {
 
    //const baseUrl =
      "https://hezekiah-architraved-superfantastically.ngrok-free.dev";
-  const baseUrl = "http://115.241.45.146:8009";
+  const baseUrl = "http://14.99.235.114:8009";
 
   const qrUrl = `${baseUrl}/entry/${qrId}`;
 

@@ -21,7 +21,7 @@ export default function GenerateQR() {
     // const baseUrl =
       // "https://hezekiah-architraved-superfantastically.ngrok-free.dev";
 	const baseUrl =
-      "http://115.241.45.146:8009";
+      "http://14.99.235.114:8009";
 
     const generatedQrs = [];
 

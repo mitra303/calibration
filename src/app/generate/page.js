@@ -64,7 +64,7 @@ export default function GenerateQR() {
   const generateQR = async () => {
     setGenerating(true);
 
-    const baseUrl = "http://115.241.45.146:8009";
+    const baseUrl = "http://14.99.235.114:8009";
 
     const res = await fetch("/api/qr/create", { method: "POST" });
     const data = await res.json();

@@ -79,7 +79,7 @@ export default function Home() {
       cleanData.map(async (row: any) => {
         const id = uuidv4();
         // const url = `https://hezekiah-architraved-superfantastically.ngrok-free.dev/details/${id}`;
-        const url = `http://115.241.45.146:8009//details/${id}`;
+        const url = `http://14.99.235.114:8009//details/${id}`;
         const qrCode = await QRCode.toDataURL(url);
         return { id, ...row, qrCode };
       })
